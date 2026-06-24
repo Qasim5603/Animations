@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Winding Swarm</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            overflow: hidden;
+        }
+        body {
+            background-color: #0e1126;
+            height: 100vh;
+            width: 100vw;
+            font-family: sans-serif;
+            position: relative;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+        #control-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 10;
+            background: rgba(14, 17, 38, 0.85);
+            padding: 15px;
+            border-radius: 12px;
+            border: 1px solid rgba(242, 235, 217, 0.2);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            max-width: 250px;
+        }
+        #ui-overlay {
+            color: #f2ebd9;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-size: 12px;
+            border-bottom: 1px solid rgba(242, 235, 217, 0.1);
+            padding-bottom: 8px;
+        }
+        #ui-overlay span {
+            font-weight: bold;
+            color: #e8a725;
+        }
+        .btn-container {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 6px;
+        }
+        button {
+            background: rgba(242, 235, 217, 0.05);
+            color: #f2ebd9;
+            border: 1px solid rgba(242, 235, 217, 0.15);
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            text-align: left;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: all 0.2s ease;
+        }
+        button:hover {
+            background: rgba(242, 235, 217, 0.15);
+            border-color: rgba(242, 235, 217, 0.4);
+        }
+        button.active {
+            background: #e8a725;
+            color: #0e1126;
+            font-weight: bold;
+            border-color: #e8a725;
+            box-shadow: 0 0 10px rgba(232, 167, 37, 0.3);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="control-panel">
+        <div id="ui-overlay">Routine: <span id="state-name">DOUBLE HELIX</span></div>
+        <div class="btn-container" id="button-group"></div>
+    </div>
+    
+    <canvas id="flowCanvas"></canvas>
+
+    <script type="module">
+        const canvas = document.getElementById('flowCanvas');
+        const ctx = canvas.getContext('2d');
+        const stateDisplay = document.getElementById('state-name');
+        const buttonGroup = document.getElementById('button-group');
+
+        const colors = ['#238551', '#e8a725', '#df5c34', '#d61c6b', '#f2ebd9'];
+        let elements = [];
+        const elementCount = 500; 
+        
+        // Tracking state registry and active function pointer
+        let activeStateName = 'DOUBLE_HELIX';
+        let currentRoutineLogic = null;
+
+        // 1. List out files mapping to your target subfolders
+        const ROUTINE_FILES = {
+            DOUBLE_HELIX: './routines/doubleHelix.js',
+            SCATTERED: './routines/scattered.js',
+            CIRCLING: './routines/circling.js',
+            DRAGON: './routines/dragon.js',
+            VORTEX: './routines/vortex.js',
+            HEART: './routines/heart.js',
+            CURVED_LOOP: './routines/curvedLoop.js'
+        };
+
+        // 2. Dynamic routine loader with seamless hot swap transition
+        async function loadRoutine(stateName) {
+            try {
+                const modulePath = ROUTINE_FILES[stateName];
+                // Dynamically import the calculation module on demand
+                const module = await import(modulePath);
+                
+                currentRoutineLogic = module.calculateTarget;
+                activeStateName = stateName;
+                stateDisplay.innerText = stateName.replace('_', ' ');
+            } catch (err) {
+                console.error(`Failed to load standalone routine: ${stateName}`, err);
+            }
+        }
+
+        function setupUI() {
+            Object.keys(ROUTINE_FILES).forEach(state => {
+                const button = document.createElement('button');
+                button.innerText = state.replace('_', ' ');
+                if (state === activeStateName) button.classList.add('active');
+                
+                button.addEventListener('click', () => {
+                    document.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+                    button.classList.add('active');
+                    loadRoutine(state);
+                });
+                buttonGroup.appendChild(button);
+            });
+        }
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth * window.devicePixelRatio;
+            canvas.height = window.innerHeight * window.devicePixelRatio;
+            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+            if (elements.length === 0) initElements();
+        }
+
+        class SwarmElement {
+            constructor(index) {
+                this.index = index;
+                this.x = Math.random() * window.innerWidth;
+                this.y = Math.random() * window.innerHeight;
+                this.vx = (Math.random() - 0.5) * 2;
+                this.vy = (Math.random() - 0.5) * 2;
+                this.width = Math.random() * 8 + 5;
+                this.length = Math.random() * 30 + 20;
+                this.color = colors[Math.floor(Math.random() * colors.length)];
+                this.baseMaxSpeed = Math.random() * 2 + 2.5; 
+                this.baseMaxForce = 0.2; 
+                this.angle = Math.random() * Math.PI * 2;
+
+                this.clusterOffsetOffset = Math.random() * Math.PI * 2;
+                this.clusterSpreadX = (Math.random() - 0.5) * 15;
+                this.clusterSpreadY = (Math.random() - 0.5) * 15;
+            }
+
+            steerTowards(targetX, targetY, speedLimit, forceLimit) {
+                let desiredVx = targetX - this.x;
+                let desiredVy = targetY - this.y;
+                let dist = Math.hypot(desiredVx, desiredVy);
+
+                if (dist > 0) {
+                    desiredVx = (desiredVx / dist) * speedLimit;
+                    desiredVy = (desiredVy / dist) * speedLimit;
+
+                    let steerX = desiredVx - this.vx;
+                    let steerY = desiredVy - this.vy;
+                    
+                    let steerMag = Math.hypot(steerX, steerY);
+                    if (steerMag > forceLimit) {
+                        steerX = (steerX / steerMag) * forceLimit;
+                        steerY = (steerY / steerMag) * forceLimit;
+                    }
+                    this.vx += steerX;
+                    this.vy += steerY;
+                }
+            }
+
+            update(time) {
+                const cx = window.innerWidth / 2;
+                const cy = window.innerHeight / 2;
+                const t = this.index / elementCount; 
+
+                let currentMaxSpeed = this.baseMaxSpeed;
+                let currentMaxForce = this.baseMaxForce;
+
+                // Fallback safe step if animation file isn't fully downloaded or compiled yet
+                if (currentRoutineLogic) {
+                    const instruction = currentRoutineLogic(this, time, cx, cy, t, elementCount);
+                    
+                    currentMaxSpeed *= (instruction.speedMod || 1.0);
+                    currentMaxForce *= (instruction.forceMod || 1.0);
+
+                    if (instruction.useDirectSteer) {
+                        this.steerTowards(instruction.tx, instruction.ty, currentMaxSpeed, currentMaxForce);
+                    }
+                }
+
+                // Running global physics tracker calculations
+                this.x += this.vx;
+                this.y += this.vy;
+                
+                let speed = Math.hypot(this.vx, this.vy);
+                if (speed > currentMaxSpeed) {
+                    this.vx = (this.vx / speed) * currentMaxSpeed;
+                    this.vy = (this.vy / speed) * currentMaxSpeed;
+                }
+                if (Math.hypot(this.vx, this.vy) > 0.1) {
+                    this.angle = Math.atan2(this.vy, this.vx);
+                }
+
+                // Seamless screen wrapping limits
+                const margin = 50;
+                if (this.x < -margin) this.x = window.innerWidth + margin;
+                if (this.x > window.innerWidth + margin) this.x = -margin;
+                if (this.y < -margin) this.y = window.innerHeight + margin;
+                if (this.y > window.innerHeight + margin) this.y = -margin;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.angle + Math.PI / 2);
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.bezierCurveTo(-this.width, -this.length * 0.3, -this.width * 0.3, -this.length * 0.8, 0, -this.length);
+                ctx.bezierCurveTo(this.width * 0.3, -this.length * 0.8, this.width, -this.length * 0.3, 0, 0);
+                ctx.closePath();
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        function initElements() {
+            elements = [];
+            for (let i = 0; i < elementCount; i++) {
+                elements.push(new SwarmElement(i));
+            }
+        }
+
+        function animate(time) {
+            ctx.fillStyle = '#0e1126';
+            ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+
+            for (let el of elements) {
+                el.update(time);
+                el.draw();
+            }
+
+            requestAnimationFrame(animate);
+        }
+
+        // Bootstrapping Engine Pipeline
+        setupUI();
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+        
+        // Initial setup load of default layout file
+        loadRoutine(activeStateName).then(() => {
+            requestAnimationFrame(animate);
+        });
+    </script>
+</body>
+</html>
