@@ -29,66 +29,62 @@
         }
         #control-panel {
             position: absolute;
-            top: 20px;
-            left: 20px;
+            top: 15px;
+            left: 15px;
             z-index: 10;
             background: rgba(14, 17, 38, 0.85);
-            padding: 15px;
-            border-radius: 12px;
-            border: 1px solid rgba(242, 235, 217, 0.2);
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid rgba(242, 235, 217, 0.15);
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 8px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-            max-width: 250px;
+            /* Set to approximately 2.5 to 3 cm on standard screens */
+            width: 110px; 
         }
         #ui-overlay {
             color: #f2ebd9;
             text-transform: uppercase;
-            letter-spacing: 2px;
-            font-size: 12px;
+            letter-spacing: 1px;
+            font-size: 8px;
             border-bottom: 1px solid rgba(242, 235, 217, 0.1);
-            padding-bottom: 8px;
+            padding-bottom: 4px;
+            text-align: center;
         }
         #ui-overlay span {
             font-weight: bold;
-            color: #e8a725;
+            display: block;
+            margin-top: 2px;
         }
         .btn-container {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 6px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
         }
         button {
-            background: rgba(242, 235, 217, 0.05);
-            color: #f2ebd9;
-            border: 1px solid rgba(242, 235, 217, 0.15);
-            padding: 8px 12px;
-            border-radius: 6px;
+            background: rgba(242, 235, 217, 0.03);
+            border: 1px solid rgba(242, 235, 217, 0.12);
+            padding: 5px 6px;
+            border-radius: 4px;
             cursor: pointer;
-            text-align: left;
-            font-size: 11px;
+            text-align: center;
+            font-size: 8px;
             text-transform: uppercase;
-            letter-spacing: 1px;
-            transition: all 0.2s ease;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            width: 100%;
         }
         button:hover {
-            background: rgba(242, 235, 217, 0.15);
-            border-color: rgba(242, 235, 217, 0.4);
-        }
-        button.active {
-            background: #e8a725;
-            color: #0e1126;
-            font-weight: bold;
-            border-color: #e8a725;
-            box-shadow: 0 0 10px rgba(232, 167, 37, 0.3);
+            background: rgba(242, 235, 217, 0.1);
         }
     </style>
 </head>
 <body>
 
     <div id="control-panel">
-        <div id="ui-overlay">Routine: <span id="state-name">DOUBLE HELIX</span></div>
+        <div id="ui-overlay">Routine <span id="state-name">DOUBLE HELIX</span></div>
         <div class="btn-container" id="button-group"></div>
     </div>
     
@@ -100,15 +96,14 @@
         const stateDisplay = document.getElementById('state-name');
         const buttonGroup = document.getElementById('button-group');
 
+        // Particle colors utilized directly for the UI design elements as well
         const colors = ['#238551', '#e8a725', '#df5c34', '#d61c6b', '#f2ebd9'];
         let elements = [];
         const elementCount = 500; 
         
-        // Tracking state registry and active function pointer
         let activeStateName = 'DOUBLE_HELIX';
         let currentRoutineLogic = null;
 
-        // 1. List out files mapping to your target subfolders
         const ROUTINE_FILES = {
             DOUBLE_HELIX: './routines/doubleHelix.js',
             SCATTERED: './routines/scattered.js',
@@ -119,30 +114,62 @@
             CURVED_LOOP: './routines/curvedLoop.js'
         };
 
-        // 2. Dynamic routine loader with seamless hot swap transition
         async function loadRoutine(stateName) {
             try {
                 const modulePath = ROUTINE_FILES[stateName];
-                // Dynamically import the calculation module on demand
                 const module = await import(modulePath);
                 
                 currentRoutineLogic = module.calculateTarget;
                 activeStateName = stateName;
-                stateDisplay.innerText = stateName.replace('_', ' ');
+                
+                const cleanName = stateName.replace('_', ' ');
+                stateDisplay.innerText = cleanName;
+                
+                // Keep the active header text matching the specific button color selection
+                const activeButton = document.getElementById(`btn-${stateName}`);
+                if (activeButton) {
+                    stateDisplay.style.color = activeButton.dataset.themeColor;
+                }
             } catch (err) {
                 console.error(`Failed to load standalone routine: ${stateName}`, err);
             }
         }
 
         function setupUI() {
-            Object.keys(ROUTINE_FILES).forEach(state => {
+            Object.keys(ROUTINE_FILES).forEach((state, index) => {
                 const button = document.createElement('button');
                 button.innerText = state.replace('_', ' ');
-                if (state === activeStateName) button.classList.add('active');
+                button.id = `btn-${state}`;
+                
+                // Cyclically assign particle colors to individual layout buttons
+                const assignedColor = colors[index % colors.length];
+                button.dataset.themeColor = assignedColor;
+                
+                // Give buttons their custom color boundary signatures
+                button.style.color = assignedColor;
+                button.style.borderColor = `${assignedColor}40`; // 40 is hex opacity alpha 25%
+
+                if (state === activeStateName) {
+                    button.style.background = assignedColor;
+                    button.style.color = '#0e1126';
+                    button.style.boxShadow = `0 0 8px ${assignedColor}50`;
+                    stateDisplay.style.color = assignedColor;
+                }
                 
                 button.addEventListener('click', () => {
-                    document.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-                    button.classList.add('active');
+                    // Reset all button inline style profiles on swap
+                    document.querySelectorAll('button').forEach(b => {
+                        const bColor = b.dataset.themeColor;
+                        b.style.background = 'rgba(242, 235, 217, 0.03)';
+                        b.style.color = bColor;
+                        b.style.boxShadow = 'none';
+                    });
+                    
+                    // Apply heavy particle fill formatting to selection target
+                    button.style.background = assignedColor;
+                    button.style.color = '#0e1126';
+                    button.style.boxShadow = `0 0 8px ${assignedColor}50`;
+                    
                     loadRoutine(state);
                 });
                 buttonGroup.appendChild(button);
@@ -205,7 +232,6 @@
                 let currentMaxSpeed = this.baseMaxSpeed;
                 let currentMaxForce = this.baseMaxForce;
 
-                // Fallback safe step if animation file isn't fully downloaded or compiled yet
                 if (currentRoutineLogic) {
                     const instruction = currentRoutineLogic(this, time, cx, cy, t, elementCount);
                     
@@ -217,7 +243,6 @@
                     }
                 }
 
-                // Running global physics tracker calculations
                 this.x += this.vx;
                 this.y += this.vy;
                 
@@ -230,7 +255,6 @@
                     this.angle = Math.atan2(this.vy, this.vx);
                 }
 
-                // Seamless screen wrapping limits
                 const margin = 50;
                 if (this.x < -margin) this.x = window.innerWidth + margin;
                 if (this.x > window.innerWidth + margin) this.x = -margin;
@@ -272,12 +296,10 @@
             requestAnimationFrame(animate);
         }
 
-        // Bootstrapping Engine Pipeline
         setupUI();
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
         
-        // Initial setup load of default layout file
         loadRoutine(activeStateName).then(() => {
             requestAnimationFrame(animate);
         });
